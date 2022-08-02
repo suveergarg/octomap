@@ -13,10 +13,17 @@ namespace octomap{
         int id;
         int est_category;
         float confidence;
+        float r,g,b;
 
-        Semantics(): id(-1), est_category(-1), confidence(0.0){}
+        Semantics(): id(-1), est_category(-1), confidence(0.0), r(0.0), g(0.0), b(0.0){}
         Semantics(int _id, int _est_category, float _confidence)
-         : id(_id), est_category(_est_category), confidence(_confidence){}
+         : id(_id), est_category(_est_category), confidence(_confidence), r(0.0), g(0.0), b(0.0){}
+        Semantics(int _id, int _est_category, float _confidence, float _r, float _g, float _b)
+         : id(_id), est_category(_est_category), confidence(_confidence){
+            r = _r;
+            g = _g;
+            b = _b;
+         }
 
         bool operator== (const Semantics &other) const{
             return (est_category == other.est_category);
@@ -55,19 +62,36 @@ namespace octomap{
         inline void setSemanticInfo(Semantics s) {this->semantic_info = s;}
         inline void setSemanticInfo(int id, int est_category, float confidence) 
             {this->semantic_info = Semantics(id, est_category, confidence);}
+        
+        inline void setSemanticInfo(int id, int est_category, float confidence, float r, float g, float b) 
+            {this->semantic_info = Semantics(id, est_category, confidence, r, g, b);}
+
         inline void clearSemanticInfo(){
             this->semantic_info.id = -1;
             this->semantic_info.est_category = -1;
             this->semantic_info.confidence = 0.0;
             this->semantic_info.category.clear();
+            this->semantic_info.r = 0.0;
+            this->semantic_info.g = 0.0;
+            this->semantic_info.b = 0.0;
         }        
         inline void setId(int id) {this->semantic_info.id = id;}
         inline void setCategory(int category) {this->semantic_info.est_category = category;}                          
+        inline void setRGB(float r, float g, float b) {
+            this->semantic_info.r = r;
+            this->semantic_info.b = b;
+            this->semantic_info.g = g;
+        }
 
         void addSemanticInfo(int id, int est_category, float confidence);
+        void addSemanticInfo(int id, int est_category, float confidence, float r, float g, float b);
         Semantics& getSemanticInfo() {return semantic_info;}
         inline int getCategory() {return this->semantic_info.est_category;}
-        inline int getId() {return this->semantic_info.id;}
+        inline int getId() {return this->semantic_info.id;}        
+        inline float getR(){return this->semantic_info.r;}
+        inline float getG(){return this->semantic_info.g;}
+        inline float getB(){return this->semantic_info.b;}
+
         void updateSemanticsChildren();
         Semantics getAverageChildSemanticInfo() const;
 
@@ -98,7 +122,8 @@ namespace octomap{
         
         // // set node color at given key or coordinate. Replaces previous color.
         SemanticOcTreeNode* setNodeSemantics(const OcTreeKey& key, int id, int est_category, float confidence);
-        
+        SemanticOcTreeNode* setNodeSemantics(const OcTreeKey& key, int id, int est_category, float confidence, float r, float g, float b);
+
         SemanticOcTreeNode* setNodeSemantics(float x, float y, 
                                              float z, int id, 
                                              int est_category, float confidence) {
@@ -107,10 +132,24 @@ namespace octomap{
             return setNodeSemantics(key,id,est_category,confidence);
         }
 
+        SemanticOcTreeNode* setNodeSemantics(float x, float y, 
+                                             float z, int id, 
+                                             int est_category, float confidence,
+                                             float r, float g, float b) {
+            OcTreeKey key;
+            if (!this->coordToKeyChecked(point3d(x,y,z), key)) return NULL;
+            return setNodeSemantics(key,id,est_category,confidence, r, g, b);
+        }
+
+
         
         SemanticOcTreeNode* integrateNodeSemantics(const OcTreeKey& key, int id, 
                                                     int est_category, float confidence);
         
+        SemanticOcTreeNode* integrateNodeSemantics(const OcTreeKey& key, int id, 
+                                                    int est_category, float confidence,
+                                                    float r, float g, float b);
+
         SemanticOcTreeNode* integrateNodeSemantics(const OcTreeKey& key);
         
         SemanticOcTreeNode* integrateNodeSemantics(float x, float y, 
@@ -121,8 +160,23 @@ namespace octomap{
             return integrateNodeSemantics(key,id, est_category, confidence);
         }
 
+        SemanticOcTreeNode* integrateNodeSemantics(float x, float y, 
+                                                    float z, uint8_t id, 
+                                                    int est_category, float confidence,
+                                                    float r, float g, float b) {
+            OcTreeKey key;
+            if (!this->coordToKeyChecked(point3d(x,y,z), key)) return NULL;
+            return integrateNodeSemantics(key,id, est_category, confidence, r, g, b);
+        }
+
+
         void insertPointCloudAndSemantics(const Pointcloud& scan, const octomap::point3d& sensor_origin, 
                                     int id, int category, float confidence,
+                                    double maxrange, bool lazy_eval, bool discretize);
+
+        void insertPointCloudAndSemantics(const Pointcloud& scan, const octomap::point3d& sensor_origin, 
+                                    int id, int category, float confidence,
+                                    float r, float g, float b,
                                     double maxrange, bool lazy_eval, bool discretize);
           
         // update inner nodes, sets color to average child color

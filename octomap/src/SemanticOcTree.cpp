@@ -21,25 +21,48 @@ namespace octomap{
     //Basic implementation of this function: Needs to be improved for future
     Semantics SemanticOcTreeNode::getAverageChildSemanticInfo() const{
         std::unordered_map<int, int> semantic_hist;
-        int max_count = 0;
+        std::unordered_map<int, int> id_hist;
+        int max_count_semantic = 0;
         int max_est_category = -1;
+
+        int max_count_id = 0;
+        int max_est_id = -1;
+
+        float rl = 0.0;
+        float gl = 0.0;
+        float bl = 0.0;
 
         if(children!=NULL){
             for(int i=0; i<8; i++) { 
                 SemanticOcTreeNode* child = static_cast<SemanticOcTreeNode*>(children[i]);
 
                 if(child != NULL){
-                    int child_est_catergory = child->getSemanticInfo().est_category;
-                    semantic_hist[child_est_catergory] += 1;
-                    if(semantic_hist[child_est_catergory]>max_count){
-                        max_count = semantic_hist[child_est_catergory];
-                        max_est_category = child_est_catergory;
+                    int child_est_category = child->getSemanticInfo().est_category;
+                    int child_id = child->getId();
+                    semantic_hist[child_id] += 1;
+                    id_hist[child_id] += 1;
+                    
+                    rl += child->getR();
+                    gl += child->getG();
+                    bl += child->getB();
+
+                    if(semantic_hist[child_est_category]>max_count_semantic){
+                        max_count_semantic = semantic_hist[child_est_category];
+                        max_est_category = child_est_category;
+                    }
+
+                    if(semantic_hist[child_id]>max_count_id){
+                        max_count_id = semantic_hist[child_id];
+                        max_est_id = child_id;
                     }
                 }
             }
+            rl = rl/8.0;
+            gl = gl/8.0;
+            bl = bl/8.0;
         }
 
-        return octomap::Semantics(-1, max_est_category, 0.0); 
+        return octomap::Semantics(max_est_id, max_est_category, 0.0, rl, gl, bl); 
     }
 
     void SemanticOcTreeNode::updateSemanticsChildren(){
@@ -71,6 +94,36 @@ namespace octomap{
         semantic_info.id = id; //Update id for the node
         confidence = confidence + 0.0; //Dummy to avoid compiler errors
     }
+
+    void SemanticOcTreeNode::addSemanticInfo(int id, int est_category, float confidence, float r, float g, float b){
+        //update 
+        if (semantic_info.category[est_category] < 10){
+            semantic_info.category[est_category] += 1;
+        }
+
+        int max = 0;
+        int new_est_category = -1;
+        for(auto &it: semantic_info.category){
+            //calculate new maximum
+            if(it.second > max){
+                new_est_category = it.first;
+                max = it.second;
+            }
+            //decay histogram
+            if( it.first != est_category)
+                it.second = std::max(it.second - 1, 0);
+        }
+
+        if (new_est_category != -1){
+            semantic_info.est_category = new_est_category;
+        }
+        semantic_info.id = id; //Update id for the node
+        semantic_info.r = r;
+        semantic_info.g = g;
+        semantic_info.b = b; //try to average in the future?
+        confidence = confidence + 0.0; //Dummy to avoid compiler errors
+    }
+
     
     //tree implementation
     SemanticOcTree::SemanticOcTree(double resolution)
@@ -91,6 +144,22 @@ namespace octomap{
         }
         return n;
     }
+
+    SemanticOcTreeNode* SemanticOcTree::setNodeSemantics(const OcTreeKey& key,
+                                                         int id,
+                                                         int est_category,
+                                                         float confidence,
+                                                         float r,
+                                                         float g,
+                                                         float b) {
+        
+        SemanticOcTreeNode* n = search(key);
+        if(n!=0){
+            n->setSemanticInfo(id, est_category, confidence, r, g, b);
+        }
+        return n;
+    }
+
 
     bool SemanticOcTree::isNodeCollapsible(const SemanticOcTreeNode* node) const{
     // all children must exist, must not have children of
@@ -152,6 +221,30 @@ namespace octomap{
         return n;
     }
 
+    SemanticOcTreeNode* SemanticOcTree::integrateNodeSemantics(const OcTreeKey& key,
+                                                                int id,
+                                                                int category,
+                                                                float confidence,
+                                                                float r,
+                                                                float g,
+                                                                float b) {
+        SemanticOcTreeNode* n = search (key);
+        if (n != 0) {
+            if (this->isNodeOccupied(n)) {
+                //Currently integrates the latest info, but need better way to integrate semantics
+                int new_id = id;
+                int new_category = category;
+                float new_confidence = confidence;
+                n->addSemanticInfo(new_id, new_category, new_confidence, r, g, b);
+                //n->setSemanticInfo(new_id, new_category, new_confidence);
+            }
+            else {
+                n->clearSemanticInfo();
+            }
+        }
+        return n;
+    }
+
     SemanticOcTreeNode* SemanticOcTree::integrateNodeSemantics(const OcTreeKey& key) {
         SemanticOcTreeNode* n = search (key);
         if (n != 0) {
@@ -199,6 +292,28 @@ namespace octomap{
     for (KeySet::iterator it = occupied_cells.begin(); it != occupied_cells.end(); ++it) {
       updateNode(*it, true, lazy_eval);
       integrateNodeSemantics(*it, id, est_category, confidence);
+    }
+  }
+
+  void SemanticOcTree::insertPointCloudAndSemantics(const Pointcloud& scan, const octomap::point3d& sensor_origin, 
+                                    int id, int est_category, float confidence,
+                                    float r, float g, float b,
+                                    double maxrange, bool lazy_eval, bool discretize) {
+
+    KeySet free_cells, occupied_cells;
+    if (discretize)
+      computeDiscreteUpdate(scan, sensor_origin, free_cells, occupied_cells, maxrange);
+    else
+      computeUpdate(scan, sensor_origin, free_cells, occupied_cells, maxrange);
+
+    // insert data into tree  -----------------------
+    for (KeySet::iterator it = free_cells.begin(); it != free_cells.end(); ++it) {
+      updateNode(*it, false, lazy_eval);
+      integrateNodeSemantics(*it); //Clears if empty
+    }
+    for (KeySet::iterator it = occupied_cells.begin(); it != occupied_cells.end(); ++it) {
+      updateNode(*it, true, lazy_eval);
+      integrateNodeSemantics(*it, id, est_category, confidence, r, g, b);
     }
   }
 }//end of namespace
