@@ -1,6 +1,6 @@
 /*
  * OctoMap - An Efficient Probabilistic 3D Mapping Framework Based on Octrees
- * http://octomap.github.com/
+ * https://octomap.github.io/
  *
  * Copyright (c) 2009-2013, K.M. Wurm and A. Hornung, University of Freiburg
  * All rights reserved.
@@ -35,4 +35,4 @@
 #include "Pointcloud.h"
 #include "ScanGraph.h"
 #include "OcTree.h"
-
+#include "SemanticOcTree.h"

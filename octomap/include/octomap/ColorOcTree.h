@@ -1,6 +1,6 @@
 /*
  * OctoMap - An Efficient Probabilistic 3D Mapping Framework Based on Octrees
- * http://octomap.github.com/
+ * https://octomap.github.io/
  *
  * Copyright (c) 2009-2013, K.M. Wurm and A. Hornung, University of Freiburg
  * All rights reserved.
@@ -168,7 +168,7 @@ namespace octomap {
 
     // uses gnuplot to plot a RGB histogram in EPS format
     void writeColorHistogram(std::string filename);
-    
+
   protected:
     void updateInnerOccupancyRecurs(ColorOcTreeNode* node, unsigned int depth);
 
